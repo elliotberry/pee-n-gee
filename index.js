@@ -1,7 +1,9 @@
 
-import zlib from 'zlib';
+import zlib from 'node:zlib'; ;
 import { Buffer } from 'node:buffer';
 import fs from 'fs';
+
+
 function isBuffer(obj) {
     return Buffer.isBuffer(obj);
 }

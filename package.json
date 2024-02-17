@@ -3,8 +3,5 @@
     "description": "A PNG decoder in JavaScript",
     "version": "1.0.0",
     "main": "index.js",
-    "type": "module",
-    "dependencies": {
-        "zlib": "^1.0.5"
-    }
+    "type": "module"
 }
