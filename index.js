@@ -1,40 +1,16 @@
-/*
- * MIT LICENSE
- * Copyright (c) 2011 Devon Govett
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy of this
- * software and associated documentation files (the "Software"), to deal in the Software
- * without restriction, including without limitation the rights to use, copy, modify, merge,
- * publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons
- * to whom the Software is furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all copies or
- * substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING
- * BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
- * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
- * DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- */
 
-const fs = require('fs');
-const zlib = require('zlib');
+import zlib from 'zlib';
+import { Buffer } from 'node:buffer';
+import fs from 'fs';
+function isBuffer(obj) {
+    return Buffer.isBuffer(obj);
+}
 
-module.exports = class PNG {
-  static decode(path, fn) {
-    return fs.readFile(path, function(err, file) {
-      const png = new PNG(file);
-      return png.decode(pixels => fn(pixels));
-    });
-  }
-
-  static load(path) {
-    const file = fs.readFileSync(path);
-    return new PNG(file);
-  }
-
+export default class PNG {
   constructor(data) {
+    if (!isBuffer(data)) {
+      throw new Error('PNG: expected Buffer');
+    }
     let i;
     this.data = data;
     this.pos = 8; // Skip the default header
@@ -84,7 +60,7 @@ module.exports = class PNG {
               // last non-opaque entry. Set up an array, stretching over all
               // palette entries which will be 0 (opaque) or 1 (transparent).
               this.transparency.indexed = this.read(chunkSize);
-              var short = 255 - this.transparency.indexed.length;
+              const short = 255 - this.transparency.indexed.length;
               if (short > 0) {
                 for (i = 0; i < short; i++) {
                   this.transparency.indexed.push(255);
@@ -104,13 +80,10 @@ module.exports = class PNG {
           break;
 
         case 'tEXt':
-          var text = this.read(chunkSize);
-          var index = text.indexOf(0);
-          var key = String.fromCharCode.apply(String, text.slice(0, index));
-          this.text[key] = String.fromCharCode.apply(
-            String,
-            text.slice(index + 1)
-          );
+          const text = this.read(chunkSize);
+          const index = text.indexOf(0);
+          const key = String.fromCharCode(...text.slice(0, index));
+          this.text[key] = String.fromCharCode(...text.slice(index + 1));
           break;
 
         case 'IEND':
@@ -128,7 +101,7 @@ module.exports = class PNG {
           }
 
           this.hasAlphaChannel = [4, 6].includes(this.colorType);
-          var colors = this.colors + (this.hasAlphaChannel ? 1 : 0);
+          const colors = this.colors + (this.hasAlphaChannel ? 1 : 0);
           this.pixelBitlength = this.bits * colors;
 
           switch (this.colors) {
@@ -140,7 +113,7 @@ module.exports = class PNG {
               break;
           }
 
-          this.imgData = new Buffer(this.imgData);
+          this.imgData = Buffer.from(this.imgData);
           return;
           break;
 
@@ -188,7 +161,7 @@ module.exports = class PNG {
       const { width, height } = this;
       const pixelBytes = this.pixelBitlength / 8;
 
-      const pixels = new Buffer(width * height * pixelBytes);
+      const pixels = Buffer.from(width * height * pixelBytes);
       const { length } = data;
       let pos = 0;
 
@@ -196,11 +169,15 @@ module.exports = class PNG {
         const w = Math.ceil((width - x0) / dx);
         const h = Math.ceil((height - y0) / dy);
         const scanlineLength = pixelBytes * w;
-        const buffer = singlePass ? pixels : new Buffer(scanlineLength * h);
+        const buffer = singlePass ? pixels : Buffer.from(scanlineLength * h);
         let row = 0;
         let c = 0;
         while (row < h && pos < length) {
-          var byte, col, i, left, upper;
+          let byte;
+          let col;
+          let i;
+          let left;
+          let upper;
           switch (data[pos++]) {
             case 0: // None
               for (i = 0; i < scanlineLength; i++) {
@@ -249,7 +226,8 @@ module.exports = class PNG {
 
             case 4: // Paeth
               for (i = 0; i < scanlineLength; i++) {
-                var paeth, upperLeft;
+                let paeth;
+                let upperLeft;
                 byte = data[pos++];
                 col = (i - (i % pixelBytes)) / pixelBytes;
                 left = i < pixelBytes ? 0 : buffer[c - pixelBytes];
@@ -337,12 +315,12 @@ module.exports = class PNG {
     const { palette } = this;
     const { length } = palette;
     const transparency = this.transparency.indexed || [];
-    const ret = new Buffer(transparency.length + length);
+    const ret = Buffer.from(transparency.length + length);
     let pos = 0;
     let c = 0;
 
     for (let i = 0; i < length; i += 3) {
-      var left;
+      let left;
       ret[pos++] = palette[i];
       ret[pos++] = palette[i + 1];
       ret[pos++] = palette[i + 2];
@@ -353,7 +331,8 @@ module.exports = class PNG {
   }
 
   copyToImageData(imageData, pixels) {
-    let j, k;
+    let j;
+    let k;
     let { colors } = this;
     let palette = null;
     let alpha = this.hasAlphaChannel;
@@ -393,10 +372,25 @@ module.exports = class PNG {
   }
 
   decode(fn) {
-    const ret = new Buffer(this.width * this.height * 4);
+    const ret = Buffer.from(this.width * this.height * 4);
     return this.decodePixels(pixels => {
       this.copyToImageData(ret, pixels);
       return fn(ret);
     });
   }
 };
+
+
+
+const main = async () => {
+  const data = fs.readFileSync('./rgb-8bit.png');
+  const png = new PNG(data);
+  const pixels = await new Promise((resolve, reject) => {
+    png.decode((pixels) => {
+      resolve(pixels);
+    });
+  });
+  console.log(pixels);
+}
+
+main();
