@@ -1,11 +1,12 @@
 portable-network-graphics.js
 ======
+![](./swagg.jpg)
 A PNG decoder in JS. Node only.
  
 ## Usage
 Install the module
 
-    yarn add png-js
+    yarn add elliotberry/portable-network-graphics.js
     
 import the module and decode a PNG
 
